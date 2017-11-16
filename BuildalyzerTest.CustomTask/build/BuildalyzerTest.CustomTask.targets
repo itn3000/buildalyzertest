@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <!-- <TaskFolder Condition="'$(MSBuildRuntimeType)' == 'Core'">netstandard2.0</TaskFolder>
+        <TaskFolder Condition="'$(MSBuildRuntimeType)' != 'Core'">net46</TaskFolder> -->
+        <TaskFolder>netstandard2.0</TaskFolder>
+    </PropertyGroup>
+    <UsingTask 
+        TaskName="BuildalyzerTest.CustomTask.GenerateToStringTask" 
+        AssemblyFile="$(NugetThisFileOfDirectory)$(TaskFolder)/BuildalyzerTest.CustomTask.dll"
+        />
+    
+</Project>
