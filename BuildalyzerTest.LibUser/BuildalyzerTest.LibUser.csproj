@@ -5,7 +5,7 @@
     <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="BuildalyzerTest.CustomTask" Version="1.0.0-alpha10"/>
+    <PackageReference Include="BuildalyzerTest.CustomTask" Version="1.0.0-alpha15"/>
   </ItemGroup>
   <Target Name="a" DependsOnTargets="ResolveReferences">
     <GenerateToStringTask/>
