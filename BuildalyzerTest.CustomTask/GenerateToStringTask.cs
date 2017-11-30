@@ -2,6 +2,7 @@
 
 namespace BuildalyzerTest.CustomTask
 {
+    using IO = System.IO;
     using MSBUtil = Microsoft.Build.Utilities;
     using MSBFramework = Microsoft.Build.Framework;
     using System.Resources;
@@ -12,6 +13,7 @@ namespace BuildalyzerTest.CustomTask
     using System.Collections.Generic;
     using System.Runtime;
     using System.Reflection;
+    using Microsoft.CodeAnalysis.CSharp;
 
     public class GenerateToStringTaskFactory : MSBFramework.ITaskFactory
     {
@@ -38,27 +40,52 @@ namespace BuildalyzerTest.CustomTask
         public bool Initialize(string taskName, IDictionary<string, MSBFramework.TaskPropertyInfo> parameterGroup, string taskBody, MSBFramework.IBuildEngine taskFactoryLoggingHost)
         {
             m_Parameters = parameterGroup.Values.ToArray();
-            try
-            {
-                if (System.AppDomain.CurrentDomain != null)
-                {
-                    System.AppDomain.CurrentDomain.AssemblyResolve += (sender, e) =>
-                    {
-                        taskFactoryLoggingHost.LogMessageEvent(new MSBFramework.BuildMessageEventArgs($"resolving {e.Name}", "AssemblyResolve", "AssemblyResolve", MSBFramework.MessageImportance.Normal));
-                        return Assembly.Load(new AssemblyName(e.Name));
-                    };
-                }
-            }
-            catch (Exception e)
-            {
+            // try
+            // {
+            //     if (System.AppDomain.CurrentDomain != null)
+            //     {
+            //         System.AppDomain.CurrentDomain.AssemblyResolve += (sender, e) =>
+            //         {
+            //             taskFactoryLoggingHost.LogMessageEvent(new MSBFramework.BuildMessageEventArgs($"resolving {e.Name}", "AssemblyResolve", "AssemblyResolve", MSBFramework.MessageImportance.Normal));
+            //             return Assembly.Load(new AssemblyName(e.Name));
+            //         };
+            //     }
+            // }
+            // catch (Exception e)
+            // {
 
-            }
+            // }
             return true;
         }
     }
 
     public class GenerateToStringTask : MSBUtil.Task
     {
+        void EnumerateSources(ProjectAnalyzer projectAnalyzer)
+        {
+            // foreach(var item in projectAnalyzer.GetSourceFiles())
+            // {
+            //     Log.LogMessage("source: {0}", item);
+            // }
+            var instance = projectAnalyzer.Project.CreateProjectInstance();
+            foreach (var evaluated in instance.EvaluatedItemElements)
+            {
+                Log.LogMessage($"evaluated: {evaluated.Include}");
+            }
+            const string itemtype = "Compile";
+            var projectDir = IO.Path.GetDirectoryName(projectAnalyzer.ProjectFilePath);
+            foreach (var item in instance.GetItems(itemtype))
+            {
+                Log.LogMessage($"itemtype({itemtype}): {item.EvaluatedInclude}");
+                var fileText = System.IO.File.ReadAllText(IO.Path.Combine(projectDir, item.EvaluatedInclude));
+                var parsed = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(fileText);
+                var rootNode = parsed.GetRoot();
+                foreach(var clsNode in rootNode.Ancestors().Where(x => x.IsKind(SyntaxKind.ClassDeclaration)))
+                {
+                    Log.LogMessage($"src = {item.EvaluatedInclude}, text={clsNode.GetText()}");
+                }
+            }
+        }
         void ProcessWorkspace(ProjectAnalyzer projectAnalyzer)
         {
             Log.LogMessage("get workspace");
@@ -81,7 +108,8 @@ namespace BuildalyzerTest.CustomTask
             var analyzeManager = new AnalyzerManager();
             Log.LogMessage("get project info:{0}", projectFile);
             var projectAnalyzer = analyzeManager.GetProject(projectFile);
-            ProcessWorkspace(projectAnalyzer);
+            // ProcessWorkspace(projectAnalyzer);
+            EnumerateSources(projectAnalyzer);
             // var projectInstance = projectAnalyzer.Compile();
             // if(projectInstance != null)
             // {

@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFrameworks>netstandard2.0;net461</TargetFrameworks>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <VersionPrefix>1.0.0-alpha15</VersionPrefix>
+    <VersionPrefix>1.0.0-alpha17</VersionPrefix>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,7 +11,7 @@
     <PackageReference Include="Buildalyzer.Workspaces" Version="0.2.1" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="15.3.409" />
     <PackageReference Include="Microsoft.CodeAnalysis" Version="2.4.0"/>
-    <PackageReference Include="Microsoft.Net.Compilers" Version="2.4.0"/>
+    <!-- <PackageReference Include="Microsoft.Net.Compilers" Version="2.4.0"/> -->
   </ItemGroup>
   <ItemGroup>
     <Content Include="build\*.targets">
