@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="BuildalyzerTest.CustomTask" Version="1.0.0-alpha17"/>
+    <DotNetCliToolReference Include="dotnet-buildalyzer-test" Version="1.0.0-alpha1"/>
   </ItemGroup>
   <Target Name="a" DependsOnTargets="ResolveReferences">
     <GenerateToStringTask/>
