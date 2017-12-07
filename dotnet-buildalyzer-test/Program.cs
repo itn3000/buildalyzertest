@@ -8,6 +8,7 @@ namespace dotnet_buildalyzer_test
     using System.Threading.Tasks;
     using System.IO;
     using System.Linq;
+    using System.Text;
     using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -20,25 +21,112 @@ namespace dotnet_buildalyzer_test
         public static string GetPropertyName(this PropertyDeclarationSyntax syntax)
         {
             return syntax.Identifier.Text;
-            // foreach(var node in syntax.DescendantNodes())
-            // {
-            // }
-            // return "";
         }
         public static string GetFieldName(this FieldDeclarationSyntax syntax)
         {
             return syntax.Declaration.Variables.First().Identifier.Text;
-            // foreach(var node in syntax.DescendantNodes().OfType<VariableDeclaratorSyntax>())
-            // {
-            //     return node.Identifier.Text;
-            //     // Console.WriteLine($"{node.Kind()},{node.GetText()}");
-            // }
-            // return "";
+        }
+        public static bool IsInnerClass(this ITypeSymbol sym)
+        {
+            return sym.ContainingType != null;
+        }
+        public static string GetQualifiedNamespace(this ITypeSymbol sym)
+        {
+            INamedTypeSymbol namedType = sym.ContainingType;
+            INamespaceSymbol ns = sym.ContainingNamespace;
+            var nslist = new List<string>();
+            while (ns != null)
+            {
+                if (!string.IsNullOrEmpty(ns.Name))
+                {
+                    nslist.Add(ns.Name);
+                }
+                ns = ns.ContainingNamespace;
+            }
+            nslist.Reverse();
+            return string.Join(".", nslist);
         }
     }
 
     class Program
     {
+        static async Task ProcessCompilationResult(Project proj, Workspace ws)
+        {
+            Console.WriteLine($"processing project: {proj.FilePath}");
+            var compilation = await proj.GetCompilationAsync();
+            // from compiled assembly symbols
+            var extCompilationRoot = CSharpSyntaxTree.ParseText($@"
+            namespace BuildalyzerTest.Generated
+            {{
+                static class MemberwiseToStringExtensions
+                {{
+                }}
+            }}
+            ").GetRoot();
+            foreach (var symbol in compilation.GetSymbolsWithName(x => true, SymbolFilter.Type).OfType<ITypeSymbol>())
+            {
+                if(symbol.IsInnerClass())
+                {
+                    continue;
+                }
+                var members = symbol.GetMembers()
+                    .Where(x =>
+                    {
+                        if (x.Kind == SymbolKind.Field)
+                        {
+                            return ((IFieldSymbol)x).DeclaredAccessibility == Accessibility.Public;
+
+                        }
+                        else if (x.Kind == SymbolKind.Property)
+                        {
+                            var propsymbol = (IPropertySymbol)x;
+                            return !propsymbol.IsWriteOnly && propsymbol.DeclaredAccessibility == Accessibility.Public;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }).ToArray();
+                if (members.Length != 0)
+                {
+                    var method = CSharpSyntaxTree.ParseText($@"
+public static string MemberwiseToString(this {symbol.GetQualifiedNamespace()}.{symbol.Name} obj)
+{{
+    return string.Format(""{string.Join(", ", Enumerable.Range(0, members.Length).Select(i => $"{{{i}}}"))}"",
+        {string.Join(", ", members.Select(m => $"obj.{m.Name}"))});
+}}").GetRoot();
+                    var classDef = extCompilationRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                        .First();
+                    var newClassDef = classDef.AddMembers(method.DescendantNodes().OfType<MethodDeclarationSyntax>().First());
+                    extCompilationRoot = extCompilationRoot.ReplaceNode(classDef, newClassDef);
+                }
+            }
+            extCompilationRoot = Formatter.Format(extCompilationRoot, ws);
+            Console.WriteLine($"result: {extCompilationRoot.GetText()}");
+        }
+        static async Task ProcessFromDocument(Project proj, Workspace ws)
+        {
+            foreach (var doc in proj.Documents)
+            {
+                Console.WriteLine($"{doc.FilePath}");
+                var rootNode = await doc.GetSyntaxRootAsync();
+                foreach (var classDecNode in rootNode.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                {
+                    foreach (var ns in classDecNode.Ancestors().OfType<NamespaceDeclarationSyntax>())
+                    {
+                        Console.WriteLine($"ns name: {ns.Name}");
+                    }
+                    foreach (var member in classDecNode.Members.OfType<PropertyDeclarationSyntax>())
+                    {
+                        Console.WriteLine($"prop id: {member.GetPropertyName()}");
+                    }
+                    foreach (var member in classDecNode.Members.OfType<FieldDeclarationSyntax>())
+                    {
+                        Console.WriteLine($"field id: {member.GetFieldName()}");
+                    }
+                }
+            }
+        }
         static async Task GenerateToStringTask(string projectFilePath)
         {
             var manager = new AnalyzerManager();
@@ -50,93 +138,9 @@ namespace dotnet_buildalyzer_test
                 Console.WriteLine($"processing project: {proj.FilePath}");
                 var compilation = await proj.GetCompilationAsync();
                 // from compiled assembly symbols
-                foreach (var symbol in compilation.GetSymbolsWithName(x => true, SymbolFilter.Type))
-                {
-                    if (symbol is ITypeSymbol ts)
-                    {
-                        Console.WriteLine($"name={ts.Name}");
-                        var nssymbol = ts.ContainingNamespace;
-                        if (nssymbol != null)
-                        {
-                            Console.WriteLine($"nssymbol: {nssymbol.Name},{nssymbol.NamespaceKind},{nssymbol.ToDisplayString()}");
-                        }
-                    }
-                }
+                await ProcessCompilationResult(proj, ws);
                 // from documents(source)
-                foreach(var doc in proj.Documents)
-                {
-                    var extFileName = Path.GetFileNameWithoutExtension(doc.FilePath);
-                    Console.WriteLine($"doc filepath: {doc.FilePath}");
-                    var rootNode = await doc.GetSyntaxRootAsync();
-                    var rootNs = rootNode.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
-                    string rootNsString;
-                    if(rootNs != null)
-                    {
-                        rootNsString = rootNs.Name.ToString();
-                    }else{
-                        rootNsString = "Extension";
-                    }
-                    var extCompilationRoot = CSharpSyntaxTree.ParseText($@"
-                    namespace {rootNsString}
-                    {{
-                        static class MemberwiseToStringExtensions
-                        {{
-
-                        }}
-                    }}
-                    ").GetRoot();
-                    foreach(var structDecNode in rootNode.DescendantNodes().OfType<StructDeclarationSyntax>())
-                    {
-                        var members = new List<string>();
-                        foreach(var member in structDecNode.Members.OfType<PropertyDeclarationSyntax>())
-                        {
-                            Console.WriteLine($"prop id: {member.GetPropertyName()}");
-                            members.Add(member.GetPropertyName());
-                        }
-                        foreach(var member in structDecNode.Members.OfType<FieldDeclarationSyntax>())
-                        {
-                            foreach(var x in member.DescendantNodes())
-                            {
-                                Console.WriteLine($"{x.Kind()},{x.GetText()}");
-                            }
-                            Console.WriteLine($"field id: {member.GetFieldName()}");
-                            members.Add(member.GetFieldName());
-                        }
-                        var method = CSharpSyntaxTree.ParseText($@"
-public static string MemberwiseToString(this {structDecNode.Identifier} obj)
-{{
-    return string.Format(""{string.Join(", ", Enumerable.Range(0, members.Count).Select(i => $"{{{i}}}"))}"",
-        {string.Join(", ", members.Select(m => $"obj.{m}"))});
-}}");
-                        // var newStructNode = structDecNode.AddMembers(
-                        //     method.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().First()
-                        //         .WithTrailingTrivia(SyntaxFactory.EndOfLine("\n")));
-                        // Console.WriteLine($"newstructnode text: {newStructNode.GetText()}");
-                        // rootNode = rootNode.ReplaceNode(structDecNode, newStructNode);
-                        // var formatted = Formatter.Format(rootNode, ws);
-                        // Console.WriteLine($"formatted text: {formatted.GetText()}");
-                        var extClassDef = extCompilationRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().First();
-                        var newExtClassDef = extClassDef.AddMembers(method.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().First());
-                        extCompilationRoot = extCompilationRoot.ReplaceNode(extClassDef, newExtClassDef);
-                    }
-                    foreach(var classDecNode in rootNode.DescendantNodes().OfType<ClassDeclarationSyntax>())
-                    {
-                        foreach(var ns in classDecNode.Ancestors().OfType<NamespaceDeclarationSyntax>())
-                        {
-                            Console.WriteLine($"ns name: {ns.Name}");
-                        }
-                        foreach(var member in classDecNode.Members.OfType<PropertyDeclarationSyntax>())
-                        {
-                            Console.WriteLine($"prop id: {member.GetPropertyName()}");
-                        }
-                        foreach(var member in classDecNode.Members.OfType<FieldDeclarationSyntax>())
-                        {
-                            Console.WriteLine($"field id: {member.GetFieldName()}");
-                        }
-                    }
-                    extCompilationRoot = Formatter.Format(extCompilationRoot, ws);
-                    Console.WriteLine($"ext source: {extCompilationRoot.GetText()}");
-                }
+                await ProcessFromDocument(proj, ws);
             }
         }
         static CommandLineApplication CreateApp()

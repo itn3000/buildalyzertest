@@ -48,10 +48,6 @@ namespace BuildalyzerTest.CustomTask
     {
         void EnumerateSources(ProjectAnalyzer projectAnalyzer)
         {
-            // foreach(var item in projectAnalyzer.GetSourceFiles())
-            // {
-            //     Log.LogMessage("source: {0}", item);
-            // }
             var instance = projectAnalyzer.Project.CreateProjectInstance();
             foreach (var evaluated in instance.EvaluatedItemElements)
             {
@@ -93,18 +89,7 @@ namespace BuildalyzerTest.CustomTask
             var analyzeManager = new AnalyzerManager();
             Log.LogMessage("get project info:{0}", projectFile);
             var projectAnalyzer = analyzeManager.GetProject(projectFile);
-            // ProcessWorkspace(projectAnalyzer);
             EnumerateSources(projectAnalyzer);
-            // var projectInstance = projectAnalyzer.Compile();
-            // if(projectInstance != null)
-            // {
-            //     foreach(var item in projectInstance.GetItems("Compile"))
-            //     {
-            //         Log.LogMessage($"{item.ItemType},{item.EvaluatedInclude}");
-            //     }
-            // }else{
-            //     Log.LogMessage("projectInstance is NULL");
-            // }
         }
         public override bool Execute()
         {
