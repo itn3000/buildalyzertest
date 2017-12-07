@@ -40,21 +40,6 @@ namespace BuildalyzerTest.CustomTask
         public bool Initialize(string taskName, IDictionary<string, MSBFramework.TaskPropertyInfo> parameterGroup, string taskBody, MSBFramework.IBuildEngine taskFactoryLoggingHost)
         {
             m_Parameters = parameterGroup.Values.ToArray();
-            // try
-            // {
-            //     if (System.AppDomain.CurrentDomain != null)
-            //     {
-            //         System.AppDomain.CurrentDomain.AssemblyResolve += (sender, e) =>
-            //         {
-            //             taskFactoryLoggingHost.LogMessageEvent(new MSBFramework.BuildMessageEventArgs($"resolving {e.Name}", "AssemblyResolve", "AssemblyResolve", MSBFramework.MessageImportance.Normal));
-            //             return Assembly.Load(new AssemblyName(e.Name));
-            //         };
-            //     }
-            // }
-            // catch (Exception e)
-            // {
-
-            // }
             return true;
         }
     }
