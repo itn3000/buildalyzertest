@@ -54,7 +54,13 @@ namespace dotnet_buildalyzer_test
         {
             Console.WriteLine($"processing project: {proj.FilePath}");
             var compilation = await proj.GetCompilationAsync();
+            foreach(var diag in compilation.GetDiagnostics())
+            {
+                Console.WriteLine($"diag: {diag.Severity}, {diag.GetMessage()}");
+            }
             // from compiled assembly symbols
+            // it is slower than creating syntaxtree directly,
+            // but more easier to read.
             var extCompilationRoot = CSharpSyntaxTree.ParseText($@"
             namespace BuildalyzerTest.Generated
             {{
@@ -89,6 +95,7 @@ namespace dotnet_buildalyzer_test
                     }).ToArray();
                 if (members.Length != 0)
                 {
+                    // add extension method in class
                     var method = CSharpSyntaxTree.ParseText($@"
 public static string MemberwiseToString(this {symbol.GetQualifiedNamespace()}.{symbol.Name} obj)
 {{
@@ -147,7 +154,7 @@ public static string MemberwiseToString(this {symbol.GetQualifiedNamespace()}.{s
         {
             var app = new CommandLineApplication(false);
             var csprojpath = app.Option("-p|--project",
-                "path to csproj",
+                "path to csproj(default: First found csproj file in current directory",
                 CommandOptionType.SingleValue);
             app.OnExecute(async () =>
             {
